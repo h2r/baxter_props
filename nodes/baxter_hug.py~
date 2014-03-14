@@ -14,6 +14,7 @@ from baxter_core_msgs.srv import SolvePositionIK, SolvePositionIKRequest
 global left_arm, right_arm
 
 def hug(height, strength):
+    baxter_interface.RobotEnable().enable()
     left_arm = baxter_interface.limb.Limb("left")
     right_arm = baxter_interface.limb.Limb("right")
     hug_prep_right = Pose(position=Point(x=0.9,y=-0.7,z=height), orientation=Quaternion(x=0,y=0.707,z=0,w=0.707))    
@@ -33,6 +34,11 @@ def hug(height, strength):
     joints_right = getIntermediateJointPositions(start_right, end_right)
     moveJoints(joints_left, joints_right)
     rospy.sleep(3)
+
+    joints_left = getIntermediateJointPositions(end_left, start_left)
+    joints_right = getIntermediateJointPositions(end_right, start_right)
+    moveJoints(joints_left, joints_right)
+    rospy.sleep(3)
     left_arm.move_to_neutral()
     right_arm.move_to_neutral()    
 
@@ -41,10 +47,35 @@ def moveJoints(left, right):
     right_arm = baxter_interface.limb.Limb("right")
     count = min(len(left), len(right))
     for i in range(count):
-        left_arm.set_joint_positions(left[i])
-        right_arm.set_joint_positions(right[i])
+        moveJointsToPosition(left_arm, left[i])
+        moveJointsToPosition(right_arm, right[i])
         rospy.sleep(0.1)
+
+def moveJointsToPosition(limb, setPoint):
+    #left_arm.set_joint_positions(left[i])
+    #right_arm.set_joint_positions(right[i])
+    springs = getSprings(limb)
+    damping = getDamping(limb)
+    cur_pos = limb.joint_angles()
+    cur_vel = limb.joint_velocities()
+    cmd = dict()
+    for joint in limb.joint_names():
+        cmd[joint] = -springs[joint] * (cur_pos[joint] - setPoint[joint])
+        cmd[joint] -= damping[joint] * cur_vel[joint]
+    limb.set_joint_torques(cmd)
+
+def getSprings(limb):
+    springs = dict()
+    for joint in limb.joint_names():
+        springs[joint] = .0001
+    return springs
     
+def getDamping(limb):
+        damping = dict()
+        for joint in limb.joint_names():
+            damping[joint] = 0
+        return damping
+
 def getIntermediateJointPositions(start, end, numSteps = 100):
     joints = []
     for i in range(numSteps):
